@@ -111,7 +111,6 @@ class VacationSensor(BinarySensorEntity):
 
     async def async_update(self):
         """Updates the state and state attributes."""
-        # GEÄNDERT: 'import ferien' hier entfernt (ist jetzt oben)
         await self.data_object.async_update()
         vacs = self.data_object.data
         dt_offset = datetime.now() + timedelta(days=self._days_offset)
@@ -151,12 +150,10 @@ class VacationData:
     async def async_update(self):
         """Updates the publicly available data container."""
         try:
-            # GEÄNDERT: 'import ferien' hier entfernt (ist jetzt oben)
             _LOGGER.debug(
                 "Retrieving data from ferien-api.de for %s",
                 self.state_code
             )
-            # Wir behalten den Executor-Job bei, da die API-Abfrage selbst blockiert
             self.data = await self.hass.async_add_executor_job(
                 ferien.state_vacations, self.state_code
             )
