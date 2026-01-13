@@ -21,22 +21,8 @@ from homeassistant.util import Throttle
 _LOGGER = logging.getLogger(__name__)
 
 ALL_STATE_CODES = [
-    "BW",
-    "BY",
-    "BE",
-    "BB",
-    "HB",
-    "HH",
-    "HE",
-    "MV",
-    "NI",
-    "NW",
-    "RP",
-    "SL",
-    "SN",
-    "ST",
-    "SH",
-    "TH",
+    "BW", "BY", "BE", "BB", "HB", "HH", "HE", "MV",
+    "NI", "NW", "RP", "SL", "SN", "ST", "SH", "TH",
 ]
 
 ATTR_DAYS_OFFSET = "days_offset"
@@ -74,17 +60,16 @@ async def async_setup_platform(
         hass, config, async_add_entities, discovery_info=None
 ):
     """Setups the ferienapidotde platform."""
-    _, _ = hass, discovery_info  # Fake usage
     days_offset = config.get(CONF_DAYS_OFFSET)
     state_code = config.get(CONF_STATE)
     name = config.get(CONF_NAME)
 
     try:
-        data_object = VacationData(state_code)
+        # Übergebe hass an das Datenobjekt, um Executor-Jobs nutzen zu können
+        data_object = VacationData(hass, state_code)
         await data_object.async_update()
     except Exception as ex:
         import traceback
-
         _LOGGER.warning(traceback.format_exc())
         raise PlatformNotReady() from ex
 
@@ -103,28 +88,18 @@ class VacationSensor(BinarySensorEntity):
 
     @property
     def name(self):
-        """Returns the name of the sensor."""
         return self._name
 
     @property
     def icon(self):
-        """Return the icon for the frontend."""
         return ICON_ON_DEFAULT if self.is_on else ICON_OFF_DEFAULT
 
     @property
     def is_on(self):
-        """Returns the state of the device."""
         return self._state
 
     @property
-    def device_state_attributes(self):
-        """Returns the state attributes of this device. This is deprecated but
-        we keep it for backwards compatibility."""
-        return self._state_attrs
-
-    @property
     def extra_state_attributes(self):
-        """Returns the state attributes of this device."""
         return self._state_attrs
 
     async def async_update(self):
@@ -133,6 +108,10 @@ class VacationSensor(BinarySensorEntity):
 
         await self.data_object.async_update()
         vacs = self.data_object.data
+        
+        if vacs is None:
+            return
+
         dt_offset = datetime.now() + timedelta(days=self._days_offset)
 
         cur = ferien.current_vacation(vacs=vacs, dt=dt_offset)
@@ -158,25 +137,32 @@ class VacationSensor(BinarySensorEntity):
             }
 
 
-class VacationData:  # pylint: disable=too-few-public-methods
+class VacationData:
     """Class for handling data retrieval."""
 
-    def __init__(self, state_code):
+    def __init__(self, hass, state_code):
         """Initializer."""
+        self.hass = hass
         self.state_code = str(state_code)
         self.data = None
 
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     async def async_update(self):
-        """Updates the publicly available data container."""
+        """Updates the data using an executor to avoid blocking calls."""
         try:
             import ferien
             _LOGGER.debug(
                 "Retrieving data from ferien-api.de for %s",
                 self.state_code
             )
-            self.data = await ferien.state_vacations_async(self.state_code)
-        except Exception:  # pylint: disable=broad-except
+            
+            # Die Library 'ferien' macht interne open() Aufrufe.
+            # Durch async_add_executor_job wird dies in einen Thread ausgelagert.
+            self.data = await self.hass.async_add_executor_job(
+                ferien.state_vacations, self.state_code
+            )
+            
+        except Exception:
             if self.data is None:
                 raise
             _LOGGER.error(
