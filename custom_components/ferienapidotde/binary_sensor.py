@@ -89,4 +89,102 @@ async def async_setup_platform(
         _LOGGER.warning(traceback.format_exc())
         raise PlatformNotReady() from ex
 
-    async_add_entities([VacationSensor(name, days_
+    async_add_entities([VacationSensor(name, days_offset, data_object)], True)
+
+
+class VacationSensor(BinarySensorEntity):
+    """Implementation of the vacation sensor."""
+
+    def __init__(self, name, days_offset, data_object):
+        self._name = name
+        self._days_offset = days_offset
+        self.data_object = data_object
+        self._state = None
+        self._state_attrs = {}
+
+    @property
+    def name(self):
+        """Returns the name of the sensor."""
+        return self._name
+
+    @property
+    def icon(self):
+        """Return the icon for the frontend."""
+        return ICON_ON_DEFAULT if self.is_on else ICON_OFF_DEFAULT
+
+    @property
+    def is_on(self):
+        """Returns the state of the device."""
+        return self._state
+
+    @property
+    def device_state_attributes(self):
+        """Returns the state attributes of this device. This is deprecated but
+        we keep it for backwards compatibility."""
+        return self._state_attrs
+
+    @property
+    def extra_state_attributes(self):
+        """Returns the state attributes of this device."""
+        return self._state_attrs
+
+    async def async_update(self):
+        """Updates the state and state attributes."""
+        import ferien
+
+        await self.data_object.async_update()
+        vacs = self.data_object.data
+        dt_offset = datetime.now() + timedelta(days=self._days_offset)
+
+        cur = ferien.current_vacation(vacs=vacs, dt=dt_offset)
+        if cur is None:
+            self._state = False
+            nextvac = ferien.next_vacation(vacs=vacs, dt=dt_offset)
+            if nextvac is None:
+                self._state_attrs = {}
+            else:
+                self._state_attrs = {
+                    ATTR_NEXT_START: nextvac.start.strftime("%Y-%m-%d"),
+                    ATTR_NEXT_END: nextvac.end.strftime("%Y-%m-%d"),
+                    ATTR_VACATION_NAME: nextvac.name,
+                    ATTR_DAYS_OFFSET: self._days_offset
+                }
+        else:
+            self._state = True
+            self._state_attrs = {
+                ATTR_START: cur.start.strftime("%Y-%m-%d"),
+                ATTR_END: cur.end.strftime("%Y-%m-%d"),
+                ATTR_VACATION_NAME: cur.name,
+                ATTR_DAYS_OFFSET: self._days_offset
+            }
+
+
+class VacationData:  # pylint: disable=too-few-public-methods
+    """Class for handling data retrieval."""
+
+    def __init__(self, hass, state_code):
+        """Initializer."""
+        # GEÄNDERT: self.hass wird initialisiert
+        self.hass = hass
+        self.state_code = str(state_code)
+        self.data = None
+
+    @Throttle(MIN_TIME_BETWEEN_UPDATES)
+    async def async_update(self):
+        """Updates the publicly available data container."""
+        try:
+            import ferien
+            _LOGGER.debug(
+                "Retrieving data from ferien-api.de for %s",
+                self.state_code
+            )
+            # GEÄNDERT: Executor-Job verhindert den blockierenden 'open' Call
+            self.data = await self.hass.async_add_executor_job(
+                ferien.state_vacations, self.state_code
+            )
+        except Exception:  # pylint: disable=broad-except
+            if self.data is None:
+                raise
+            _LOGGER.error(
+                "Failed to update the vacation data. Re-using an old state"
+            )
