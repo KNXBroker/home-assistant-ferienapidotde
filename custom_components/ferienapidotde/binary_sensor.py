@@ -21,8 +21,22 @@ from homeassistant.util import Throttle
 _LOGGER = logging.getLogger(__name__)
 
 ALL_STATE_CODES = [
-    "BW", "BY", "BE", "BB", "HB", "HH", "HE", "MV",
-    "NI", "NW", "RP", "SL", "SN", "ST", "SH", "TH",
+    "BW",
+    "BY",
+    "BE",
+    "BB",
+    "HB",
+    "HH",
+    "HE",
+    "MV",
+    "NI",
+    "NW",
+    "RP",
+    "SL",
+    "SN",
+    "ST",
+    "SH",
+    "TH",
 ]
 
 ATTR_DAYS_OFFSET = "days_offset"
@@ -60,111 +74,19 @@ async def async_setup_platform(
         hass, config, async_add_entities, discovery_info=None
 ):
     """Setups the ferienapidotde platform."""
+    _, _ = hass, discovery_info  # Fake usage
     days_offset = config.get(CONF_DAYS_OFFSET)
     state_code = config.get(CONF_STATE)
     name = config.get(CONF_NAME)
 
     try:
-        # Übergebe hass an das Datenobjekt, um Executor-Jobs nutzen zu können
+        # GEÄNDERT: hass wird nun an VacationData übergeben
         data_object = VacationData(hass, state_code)
         await data_object.async_update()
     except Exception as ex:
         import traceback
+
         _LOGGER.warning(traceback.format_exc())
         raise PlatformNotReady() from ex
 
-    async_add_entities([VacationSensor(name, days_offset, data_object)], True)
-
-
-class VacationSensor(BinarySensorEntity):
-    """Implementation of the vacation sensor."""
-
-    def __init__(self, name, days_offset, data_object):
-        self._name = name
-        self._days_offset = days_offset
-        self.data_object = data_object
-        self._state = None
-        self._state_attrs = {}
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def icon(self):
-        return ICON_ON_DEFAULT if self.is_on else ICON_OFF_DEFAULT
-
-    @property
-    def is_on(self):
-        return self._state
-
-    @property
-    def extra_state_attributes(self):
-        return self._state_attrs
-
-    async def async_update(self):
-        """Updates the state and state attributes."""
-        import ferien
-
-        await self.data_object.async_update()
-        vacs = self.data_object.data
-        
-        if vacs is None:
-            return
-
-        dt_offset = datetime.now() + timedelta(days=self._days_offset)
-
-        cur = ferien.current_vacation(vacs=vacs, dt=dt_offset)
-        if cur is None:
-            self._state = False
-            nextvac = ferien.next_vacation(vacs=vacs, dt=dt_offset)
-            if nextvac is None:
-                self._state_attrs = {}
-            else:
-                self._state_attrs = {
-                    ATTR_NEXT_START: nextvac.start.strftime("%Y-%m-%d"),
-                    ATTR_NEXT_END: nextvac.end.strftime("%Y-%m-%d"),
-                    ATTR_VACATION_NAME: nextvac.name,
-                    ATTR_DAYS_OFFSET: self._days_offset
-                }
-        else:
-            self._state = True
-            self._state_attrs = {
-                ATTR_START: cur.start.strftime("%Y-%m-%d"),
-                ATTR_END: cur.end.strftime("%Y-%m-%d"),
-                ATTR_VACATION_NAME: cur.name,
-                ATTR_DAYS_OFFSET: self._days_offset
-            }
-
-
-class VacationData:
-    """Class for handling data retrieval."""
-
-    def __init__(self, hass, state_code):
-        """Initializer."""
-        self.hass = hass
-        self.state_code = str(state_code)
-        self.data = None
-
-    @Throttle(MIN_TIME_BETWEEN_UPDATES)
-    async def async_update(self):
-        """Updates the data using an executor to avoid blocking calls."""
-        try:
-            import ferien
-            _LOGGER.debug(
-                "Retrieving data from ferien-api.de for %s",
-                self.state_code
-            )
-            
-            # Die Library 'ferien' macht interne open() Aufrufe.
-            # Durch async_add_executor_job wird dies in einen Thread ausgelagert.
-            self.data = await self.hass.async_add_executor_job(
-                ferien.state_vacations, self.state_code
-            )
-            
-        except Exception:
-            if self.data is None:
-                raise
-            _LOGGER.error(
-                "Failed to update the vacation data. Re-using an old state"
-            )
+    async_add_entities([VacationSensor(name, days_
