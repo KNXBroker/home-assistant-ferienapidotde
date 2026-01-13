@@ -9,7 +9,6 @@ https://github.com/HazardDede/home-assistant-ferienapidotde
 import logging
 from datetime import datetime, timedelta
 
-# DIESE IMPORTE WURDEN NACH OBEN VERSCHOBEN:
 import ferien
 import json
 import voluptuous as vol
@@ -87,7 +86,7 @@ async def async_setup_platform(
         await data_object.async_update()
     except Exception as ex:
         import traceback
-        
+
         _LOGGER.warning(traceback.format_exc())
         raise PlatformNotReady() from ex
 
