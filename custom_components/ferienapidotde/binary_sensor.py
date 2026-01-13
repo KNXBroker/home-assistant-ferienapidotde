@@ -87,6 +87,7 @@ async def async_setup_platform(
         await data_object.async_update()
     except Exception as ex:
         import traceback
+        
         _LOGGER.warning(traceback.format_exc())
         raise PlatformNotReady() from ex
 
