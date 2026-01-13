@@ -9,6 +9,10 @@ https://github.com/HazardDede/home-assistant-ferienapidotde
 import logging
 from datetime import datetime, timedelta
 
+# DIESE IMPORTE WURDEN NACH OBEN VERSCHOBEN:
+import ferien
+import json
+
 import voluptuous as vol
 
 import homeassistant.helpers.config_validation as cv
@@ -21,22 +25,8 @@ from homeassistant.util import Throttle
 _LOGGER = logging.getLogger(__name__)
 
 ALL_STATE_CODES = [
-    "BW",
-    "BY",
-    "BE",
-    "BB",
-    "HB",
-    "HH",
-    "HE",
-    "MV",
-    "NI",
-    "NW",
-    "RP",
-    "SL",
-    "SN",
-    "ST",
-    "SH",
-    "TH",
+    "BW", "BY", "BE", "BB", "HB", "HH", "HE", "MV",
+    "NI", "NW", "RP", "SL", "SN", "ST", "SH", "TH",
 ]
 
 ATTR_DAYS_OFFSET = "days_offset"
@@ -55,7 +45,6 @@ DEFAULT_NAME = "Vacation Sensor"
 ICON_OFF_DEFAULT = "mdi:calendar-remove"
 ICON_ON_DEFAULT = "mdi:calendar-check"
 
-# Don't rush the api. Every 12h should suffice.
 MIN_TIME_BETWEEN_UPDATES = timedelta(hours=12)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
@@ -74,18 +63,16 @@ async def async_setup_platform(
         hass, config, async_add_entities, discovery_info=None
 ):
     """Setups the ferienapidotde platform."""
-    _, _ = hass, discovery_info  # Fake usage
+    _, _ = hass, discovery_info
     days_offset = config.get(CONF_DAYS_OFFSET)
     state_code = config.get(CONF_STATE)
     name = config.get(CONF_NAME)
 
     try:
-        # GEÄNDERT: hass wird nun an VacationData übergeben
         data_object = VacationData(hass, state_code)
         await data_object.async_update()
     except Exception as ex:
         import traceback
-
         _LOGGER.warning(traceback.format_exc())
         raise PlatformNotReady() from ex
 
@@ -104,34 +91,27 @@ class VacationSensor(BinarySensorEntity):
 
     @property
     def name(self):
-        """Returns the name of the sensor."""
         return self._name
 
     @property
     def icon(self):
-        """Return the icon for the frontend."""
         return ICON_ON_DEFAULT if self.is_on else ICON_OFF_DEFAULT
 
     @property
     def is_on(self):
-        """Returns the state of the device."""
         return self._state
 
     @property
     def device_state_attributes(self):
-        """Returns the state attributes of this device. This is deprecated but
-        we keep it for backwards compatibility."""
         return self._state_attrs
 
     @property
     def extra_state_attributes(self):
-        """Returns the state attributes of this device."""
         return self._state_attrs
 
     async def async_update(self):
         """Updates the state and state attributes."""
-        import ferien
-
+        # GEÄNDERT: 'import ferien' hier entfernt (ist jetzt oben)
         await self.data_object.async_update()
         vacs = self.data_object.data
         dt_offset = datetime.now() + timedelta(days=self._days_offset)
@@ -159,12 +139,10 @@ class VacationSensor(BinarySensorEntity):
             }
 
 
-class VacationData:  # pylint: disable=too-few-public-methods
+class VacationData:
     """Class for handling data retrieval."""
 
     def __init__(self, hass, state_code):
-        """Initializer."""
-        # GEÄNDERT: self.hass wird initialisiert
         self.hass = hass
         self.state_code = str(state_code)
         self.data = None
@@ -173,16 +151,16 @@ class VacationData:  # pylint: disable=too-few-public-methods
     async def async_update(self):
         """Updates the publicly available data container."""
         try:
-            import ferien
+            # GEÄNDERT: 'import ferien' hier entfernt (ist jetzt oben)
             _LOGGER.debug(
                 "Retrieving data from ferien-api.de for %s",
                 self.state_code
             )
-            # GEÄNDERT: Executor-Job verhindert den blockierenden 'open' Call
+            # Wir behalten den Executor-Job bei, da die API-Abfrage selbst blockiert
             self.data = await self.hass.async_add_executor_job(
                 ferien.state_vacations, self.state_code
             )
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             if self.data is None:
                 raise
             _LOGGER.error(
