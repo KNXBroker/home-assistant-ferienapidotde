@@ -80,7 +80,8 @@ async def async_setup_platform(
     name = config.get(CONF_NAME)
 
     try:
-        data_object = VacationData(state_code)
+        # GEÄNDERT: hass wird nun an VacationData übergeben
+        data_object = VacationData(hass, state_code)
         await data_object.async_update()
     except Exception as ex:
         import traceback
@@ -161,8 +162,9 @@ class VacationSensor(BinarySensorEntity):
 class VacationData:  # pylint: disable=too-few-public-methods
     """Class for handling data retrieval."""
 
-    def __init__(self, state_code):
+    def __init__(self, hass, state_code):
         """Initializer."""
+        self.hass = hass
         self.state_code = str(state_code)
         self.data = None
 
@@ -175,7 +177,9 @@ class VacationData:  # pylint: disable=too-few-public-methods
                 "Retrieving data from ferien-api.de for %s",
                 self.state_code
             )
-            self.data = await ferien.state_vacations_async(self.state_code)
+            self.data = await self.hass.async_add_executor_job(
+                ferien.state_vacations, self.state_code
+            )
         except Exception:  # pylint: disable=broad-except
             if self.data is None:
                 raise
