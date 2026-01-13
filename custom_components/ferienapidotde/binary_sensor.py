@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 # DIESE IMPORTE WURDEN NACH OBEN VERSCHOBEN:
 import ferien
 import json
-
 import voluptuous as vol
 
 import homeassistant.helpers.config_validation as cv
@@ -25,8 +24,22 @@ from homeassistant.util import Throttle
 _LOGGER = logging.getLogger(__name__)
 
 ALL_STATE_CODES = [
-    "BW", "BY", "BE", "BB", "HB", "HH", "HE", "MV",
-    "NI", "NW", "RP", "SL", "SN", "ST", "SH", "TH",
+    "BW",
+    "BY",
+    "BE",
+    "BB",
+    "HB",
+    "HH",
+    "HE",
+    "MV",
+    "NI",
+    "NW",
+    "RP",
+    "SL",
+    "SN",
+    "ST",
+    "SH",
+    "TH",
 ]
 
 ATTR_DAYS_OFFSET = "days_offset"
@@ -45,6 +58,7 @@ DEFAULT_NAME = "Vacation Sensor"
 ICON_OFF_DEFAULT = "mdi:calendar-remove"
 ICON_ON_DEFAULT = "mdi:calendar-check"
 
+# Don't rush the api. Every 12h should suffice.
 MIN_TIME_BETWEEN_UPDATES = timedelta(hours=12)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
@@ -63,7 +77,7 @@ async def async_setup_platform(
         hass, config, async_add_entities, discovery_info=None
 ):
     """Setups the ferienapidotde platform."""
-    _, _ = hass, discovery_info
+    _, _ = hass, discovery_info  # Fake usage
     days_offset = config.get(CONF_DAYS_OFFSET)
     state_code = config.get(CONF_STATE)
     name = config.get(CONF_NAME)
@@ -91,22 +105,28 @@ class VacationSensor(BinarySensorEntity):
 
     @property
     def name(self):
+        """Returns the name of the sensor."""
         return self._name
 
     @property
     def icon(self):
+        """Return the icon for the frontend."""
         return ICON_ON_DEFAULT if self.is_on else ICON_OFF_DEFAULT
 
     @property
     def is_on(self):
+        """Returns the state of the device."""
         return self._state
 
     @property
     def device_state_attributes(self):
+        """Returns the state attributes of this device. This is deprecated but
+        we keep it for backwards compatibility."""
         return self._state_attrs
 
     @property
     def extra_state_attributes(self):
+        """Returns the state attributes of this device."""
         return self._state_attrs
 
     async def async_update(self):
@@ -138,10 +158,11 @@ class VacationSensor(BinarySensorEntity):
             }
 
 
-class VacationData:
+class VacationData:  # pylint: disable=too-few-public-methods
     """Class for handling data retrieval."""
 
     def __init__(self, hass, state_code):
+        """Initializer."""
         self.hass = hass
         self.state_code = str(state_code)
         self.data = None
@@ -157,7 +178,7 @@ class VacationData:
             self.data = await self.hass.async_add_executor_job(
                 ferien.state_vacations, self.state_code
             )
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             if self.data is None:
                 raise
             _LOGGER.error(
