@@ -10,7 +10,6 @@ import logging
 from datetime import datetime, timedelta
 
 import ferien
-import json
 import voluptuous as vol
 
 import homeassistant.helpers.config_validation as cv
